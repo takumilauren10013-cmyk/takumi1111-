@@ -4,29 +4,141 @@
 <meta charset="UTF-8" />
 <title>JapanChecker</title>
 <style>
-  body { font-family: sans-serif; max-width: 920px; margin: 40px auto; padding: 0 16px; color: #222; }
-  h1 { font-size: 20px; }
-  button { padding: 10px 18px; font-size: 14px; cursor: pointer; margin-right: 8px; margin-bottom: 8px; }
-  #status { margin-top: 20px; padding: 12px; background: #f4f4f4; border-radius: 6px; white-space: pre-wrap; font-size: 13px; }
-  .tabs { margin-top: 24px; border-bottom: 2px solid #ddd; }
-  .tab-btn { padding: 8px 16px; font-size: 14px; cursor: pointer; border: none; background: none; border-bottom: 3px solid transparent; margin-right: 4px; }
-  .tab-btn.active { border-bottom: 3px solid #2563eb; font-weight: bold; color: #2563eb; }
+  :root {
+    --bg: #150f24;
+    --bg-panel: #1e1734;
+    --bg-elevated: #271e40;
+    --bg-input: #1a1330;
+    --border: #3a2c5c;
+    --border-strong: #4d3b78;
+    --text: #ece7f7;
+    --text-muted: #a394c4;
+    --accent: #9b6dff;
+    --accent-hover: #b58aff;
+    --accent-soft: rgba(155, 109, 255, 0.16);
+    --danger: #ff6b8b;
+    --called-bg: #1a2e28;
+    --called-text: #7fd8a8;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+    max-width: 920px;
+    margin: 40px auto;
+    padding: 0 16px 60px;
+    color: var(--text);
+    background: var(--bg);
+  }
+
+  h1 {
+    font-size: 22px;
+    margin-bottom: 4px;
+    background: linear-gradient(90deg, #cdb4ff, #9b6dff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    display: inline-block;
+  }
+
+  p { color: var(--text-muted); }
+  a { color: var(--accent); }
+
+  button {
+    padding: 10px 18px;
+    font-size: 14px;
+    cursor: pointer;
+    margin-right: 8px;
+    margin-bottom: 8px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    transition: background 0.15s ease;
+  }
+  button:hover { background: var(--accent-hover); }
+  button:active { background: #7d4fe0; }
+
+  input[type="checkbox"] { accent-color: var(--accent); }
+
+  #status {
+    margin-top: 20px;
+    padding: 12px 14px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    white-space: pre-wrap;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .tabs { margin-top: 24px; border-bottom: 2px solid var(--border); }
+  .tab-btn {
+    padding: 8px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-bottom: 3px solid transparent;
+    margin-right: 4px;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  .tab-btn.active { border-bottom: 3px solid var(--accent); color: var(--accent); }
   .tab-panel { display: none; padding-top: 16px; }
   .tab-panel.active { display: block; }
-  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; font-size: 13px; flex-wrap: wrap; }
-  table { border-collapse: collapse; width: 100%; font-size: 12px; }
-  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; white-space: nowrap; }
-  th { background: #f4f4f4; position: sticky; top: 0; }
-  .table-wrap { max-height: 460px; overflow: auto; border: 1px solid #ddd; }
-  .badge { display: inline-block; background: #dc2626; color: #fff; border-radius: 10px; padding: 1px 7px; font-size: 11px; margin-left: 6px; }
-  .empty { color: #888; font-size: 13px; padding: 12px; }
-  .note { color: #888; font-size: 12px; padding: 6px 4px; }
-  tr.called { background: #f0fdf4; color: #888; }
+
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; font-size: 13px; flex-wrap: wrap; color: var(--text-muted); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 12px; color: var(--text); }
+  th, td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; white-space: nowrap; }
+  th { background: var(--bg-elevated); position: sticky; top: 0; color: var(--text); }
+  tbody tr:hover { background: var(--accent-soft); }
+
+  .table-wrap { max-height: 460px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+
+  .badge {
+    display: inline-block;
+    background: var(--danger);
+    color: #2a0d18;
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 11px;
+    margin-left: 6px;
+    font-weight: 700;
+  }
+
+  .empty { color: var(--text-muted); font-size: 13px; padding: 12px; }
+  .note { color: var(--text-muted); font-size: 12px; padding: 6px 4px; }
+
+  tr.called { background: var(--called-bg); color: var(--called-text); }
   tr.called td { text-decoration: line-through; }
   .call-cell { text-align: center; white-space: nowrap; }
-  textarea { width: 100%; box-sizing: border-box; font-family: monospace; font-size: 13px; padding: 8px; }
-  .domain-box { background: #f9fafb; border: 1px solid #ddd; border-radius: 6px; padding: 14px; margin-bottom: 20px; }
-  .save-msg { font-size: 13px; margin-left: 8px; color: #0a7d28; }
+
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 13px;
+    padding: 10px;
+    background: var(--bg-input);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  textarea:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+
+  .domain-box {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 20px;
+  }
+
+  .save-msg { font-size: 13px; margin-left: 8px; color: var(--called-text); }
 </style>
 </head>
 <body>
@@ -82,6 +194,7 @@
     <div class="toolbar">
       <button id="downloadNewBtn">未架電リストをダウンロード</button>
       <button id="refreshNewBtn">一覧を更新</button>
+      <button id="compactHistoryBtn">履歴を整理する</button>
       <label><input type="checkbox" id="newFilterCheck" checked /> 架電済みをその場で非表示にする</label>
     </div>
     <div id="newTableWrap" class="table-wrap"><div class="empty">まだ対象がありません。</div></div>
@@ -102,6 +215,7 @@ const downloadBtn = document.getElementById('downloadBtn');
 const downloadNewBtn = document.getElementById('downloadNewBtn');
 const refreshAllBtn = document.getElementById('refreshAllBtn');
 const refreshNewBtn = document.getElementById('refreshNewBtn');
+const compactHistoryBtn = document.getElementById('compactHistoryBtn');
 const resumeCheck = document.getElementById('resumeCheck');
 const newBadge = document.getElementById('newBadge');
 const allTableWrap = document.getElementById('allTableWrap');
@@ -112,6 +226,7 @@ const newFilterCheck = document.getElementById('newFilterCheck');
 let polling = null;
 let wasRunning = false;
 let notified = false;
+let lastListRefreshAt = 0;
 
 function formatMs(ms) {
   if (ms === null || ms === undefined) return '---';
@@ -227,24 +342,36 @@ function notifyIfNeeded(s) {
 async function refreshStatus() {
   const res = await fetch('/api/status');
   const s = await res.json();
-  const runningLabel = s.running ? '動作中' : '停止中';
-  statusEl.textContent =
-    `状態: ${runningLabel}${s.resumed ? '(再開モード)' : ''}\n` +
-    `全体件数: ${s.total}件\n` +
-    `前回までの処理済み: ${s.alreadyDone}件\n` +
-    `今回処理した件数: ${s.processed}件\n` +
-    `残り件数(目安): ${s.remaining}件\n` +
-    `該当件数(スコア対象): ${s.matched}件\n` +
-    `新規発見件数: ${s.newFound}件\n` +
-    `経過時間: ${formatMs(s.elapsedMs)}\n` +
-    `残り予測時間(目安): ${formatMs(s.etaMs)}\n` +
-    (s.skipped ? `停止によりスキップ: ${s.skipped}件\n` : '') +
-    (s.zeroScoreSkipped ? `スコア0件でCSV未出力: ${s.zeroScoreSkipped}件\n` : '') +
-    (s.lastError ? `エラー: ${s.lastError}\n` : '');
+
+  if (!s.startedAt) {
+    // まだ一度も「解析を開始」を押していない状態。古い数字は出さず案内だけ表示する。
+    statusEl.textContent = 'まだ解析を実行していません。上の欄でドメインを保存してから「解析を開始」を押してください。';
+  } else {
+    const runningLabel = s.running ? '動作中' : '停止中';
+    statusEl.textContent =
+      `状態: ${runningLabel}${s.resumed ? '(再開モード)' : ''}\n` +
+      `今回解析した件数: ${s.total}件\n` +
+      `前回までの処理済み: ${s.alreadyDone}件\n` +
+      `今回処理した件数: ${s.processed}件\n` +
+      `残り件数(目安): ${s.remaining}件\n` +
+      `該当件数(スコア対象): ${s.matched}件\n` +
+      `新規発見件数: ${s.newFound}件\n` +
+      `経過時間: ${formatMs(s.elapsedMs)}\n` +
+      `残り予測時間(目安): ${formatMs(s.etaMs)}\n` +
+      (s.skipped ? `停止によりスキップ: ${s.skipped}件\n` : '') +
+      (s.zeroScoreSkipped ? `スコア0件でCSV未出力: ${s.zeroScoreSkipped}件\n` : '') +
+      (s.lastError ? `エラー: ${s.lastError}\n` : '');
+  }
 
   if (s.newFound > 0) {
     newBadge.style.display = 'inline-block';
     newBadge.textContent = s.newFound;
+  }
+
+  // 実行中は、抽出が終わるのを待たずに未架電リストを定期的に自動更新する(10秒に1回程度)
+  if (s.running && Date.now() - lastListRefreshAt > 10000) {
+    lastListRefreshAt = Date.now();
+    loadNewList();
   }
 
   notifyIfNeeded(s);
@@ -300,6 +427,17 @@ downloadNewBtn.addEventListener('click', () => {
 
 refreshAllBtn.addEventListener('click', loadAllList);
 refreshNewBtn.addEventListener('click', loadNewList);
+
+compactHistoryBtn.addEventListener('click', async () => {
+  const res = await fetch('/api/compact-history', { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) {
+    alert(data.error || '整理できませんでした');
+    return;
+  }
+  alert(`履歴を整理しました(${data.count}件)`);
+  loadNewList();
+});
 
 // ---- ドメイン一覧の読み込み・保存 ----
 
