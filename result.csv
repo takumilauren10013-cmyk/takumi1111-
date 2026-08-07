@@ -1,8 +1,0 @@
-ドメイン,アクセスできたURL,スコア,電話番号,JPドメイン,日本語検出,lang=ja指定,事業者名検出,日本住所検出,お問い合わせページ,会社概要ページ,Googleマップ,アクセスページ,事業内容ページ,判定,除外理由
-yokohama-kirakira.com,https://yokohama-kirakira.com/,50,〇,×,〇,〇,×,〇,×,×,〇,〇,×,対象,
-kumakogen-kanko.com,https://www.kumakogen-kanko.com/,60,〇,×,〇,〇,〇,〇,×,×,×,×,×,対象,
-sakaiganka.jp,https://sakaiganka.jp/,55,〇,〇,〇,〇,×,〇,×,×,〇,×,×,対象,
-jgame.jp,https://jgame.jp/,70,〇,〇,〇,〇,〇,〇,×,×,×,×,×,対象,
-kyubi-utsunomiya-shi.com,https://kyubi-utsunomiya-shi.com/ja,60,〇,×,〇,×,×,〇,〇,〇,〇,〇,〇,対象,
-xflux.jp,https://xflux.jp/,75,〇,〇,〇,〇,〇,〇,×,〇,×,×,×,対象,
-xn--mgbaadi9bgd0nr0d.com,https://xn--mgbaadi9bgd0nr0d.com/,20,〇,×,×,×,×,〇,×,×,×,×,×,対象,
