@@ -19,7 +19,7 @@ const https = require("https");
 const scoreConfig = require("./score_config");
 
 // =======================================================
-// 設定値 (5000件規模を想定し、環境変数で調整できるようにしてある)
+// 設定値 (7万件規模まで動かせるよう、環境変数で調整できるようにしてある)
 // =======================================================
 const PORT = process.env.PORT || 3000;
 // 社外/社内の誰でもアクセスできる状態で公開するため、Basic認証をかける。
@@ -35,16 +35,19 @@ const CALL_STATUS_FILE = path.join(__dirname, "call_status.json"); // 架電済�
 const MAX_TABLE_ROWS = Number(process.env.MAX_TABLE_ROWS) || 1000; // 画面の表に一度に表示する最大件数(全件はCSVで確認)
 
 const REQUEST_TIMEOUT = Number(process.env.REQUEST_TIMEOUT) || 8000; // 1リクエストのタイムアウト(ms)
-const DOMAIN_CONCURRENCY = Number(process.env.DOMAIN_CONCURRENCY) || 8; // 同時に処理するドメイン数
+const DOMAIN_CONCURRENCY = Number(process.env.DOMAIN_CONCURRENCY) || 15; // 同時に処理するドメイン数(7万件規模ではEnvironmentで15〜30程度を推奨)
 const PAGE_CONCURRENCY = Number(process.env.PAGE_CONCURRENCY) || 3; // 1ドメイン内で同時に取得する内部ページ数
 const RETRY_COUNT = Number(process.env.RETRY_COUNT) || 1; // タイムアウト/接続エラー時の再試行回数
 const RETRY_DELAY = Number(process.env.RETRY_DELAY) || 1000; // 再試行までの待機(ms)
 const USER_AGENT =
   "Mozilla/5.0 (compatible; JapanCheckerBot/1.0; +https://example.com/bot)";
 
-// コネクションを使い回して大量アクセス時の負荷・速度を改善する
-const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 100 });
-const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100 });
+// コネクションを使い回して大量アクセス時の負荷・速度を改善する。
+// maxSocketsは「同時接続数」の上限。DOMAIN_CONCURRENCY×PAGE_CONCURRENCYより
+// 十分大きくしておく(例: 30×3=90に対して200なら余裕がある)。
+const MAX_SOCKETS = Number(process.env.MAX_SOCKETS) || 200;
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: MAX_SOCKETS });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: MAX_SOCKETS });
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -468,21 +471,80 @@ function parseCsvLine(line) {
 
 // =======================================================
 // 新規事業者の検出用「台帳」(history.json)
+// -------------------------------------------------------
+// 1行に1件のJSONを書く形式(NDJSON)で保存する。
+// 見つかるたびに1行ずつ追記するだけなので、7万件規模でも
+// 「実行が全部終わるまでファイルに保存されない」ということが起きず、
+// 実行中でも未架電リストにリアルタイムで反映される。
+// 同じドメインを再チェックした場合は、新しい行が追加される
+// (読み込み時に「そのドメインの一番新しい行」だけを使う)。
 // =======================================================
 
-// 過去に見つかった事業者(ドメイン→初回検出日など)を読み込む。
-// このファイルは実行のたびに消えることはなく、ずっと蓄積されていく。
-function loadHistory() {
-  if (!fs.existsSync(HISTORY_FILE)) return {};
-  try {
-    return JSON.parse(fs.readFileSync(HISTORY_FILE, "utf-8"));
-  } catch (e) {
-    return {};
+// ファイルを読み込み、ドメインごとに最新の行だけを残したMapを返す。
+// 旧バージョン(1つの大きなJSONオブジェクトとして保存していた形式)も読み込めるようにしてある。
+function loadHistoryMap() {
+  const map = new Map();
+  if (!fs.existsSync(HISTORY_FILE)) return map;
+
+  const content = fs.readFileSync(HISTORY_FILE, "utf-8").trim();
+  if (!content) return map;
+
+  const lines = content.split(/\r?\n/).filter((l) => l.length > 0);
+  let allLinesAreValidEntries = true;
+  const parsedLines = [];
+
+  for (const line of lines) {
+    try {
+      const obj = JSON.parse(line);
+      if (!obj || !obj.domain || !obj.row) {
+        allLinesAreValidEntries = false;
+        break;
+      }
+      parsedLines.push(obj);
+    } catch (e) {
+      allLinesAreValidEntries = false;
+      break;
+    }
   }
+
+  if (allLinesAreValidEntries && parsedLines.length > 0) {
+    // 新形式(NDJSON)。同じドメインが複数回出てきたら、後の行(=新しい方)で上書きする
+    parsedLines.forEach((entry) => map.set(entry.domain, entry));
+    return map;
+  }
+
+  // 旧形式(1つの大きなJSONオブジェクト)を試す(過去バージョンとの互換用)
+  try {
+    const obj = JSON.parse(content);
+    Object.entries(obj).forEach(([domain, entry]) => {
+      if (entry && entry.row) {
+        map.set(domain, {
+          domain,
+          firstSeenAt: entry.firstSeenAt,
+          lastCheckedAt: entry.lastCheckedAt || entry.firstSeenAt,
+          row: entry.row,
+        });
+      }
+      // さらに古い形式({firstSeenAt, score}のみ)は詳細情報が無いため復元できず、対象外とする
+    });
+  } catch (e) {
+    // どちらの形式でもなければ空として扱う
+  }
+  return map;
 }
 
-function saveHistory(history) {
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2), "utf-8");
+// 1件分の履歴を末尾に追記する(ファイル全体の書き直しはしない = 件数が増えても速度が落ちない)
+function appendHistoryEntry(entry) {
+  fs.appendFileSync(HISTORY_FILE, JSON.stringify(entry) + "\n", "utf-8");
+}
+
+// 履歴ファイルを整理する(同じドメインの重複行をまとめて、最新の状態だけを残す)。
+// 何度も再チェックを繰り返してファイルが大きくなってきたときに使う。
+function compactHistoryFile() {
+  const map = loadHistoryMap();
+  const lines = [...map.values()].map((entry) => JSON.stringify(entry)).join("\n");
+  fs.writeFileSync(HISTORY_FILE, lines ? lines + "\n" : "", "utf-8");
+  return map.size;
 }
 
 // =======================================================
@@ -505,11 +567,12 @@ function saveCallStatus(status) {
 
 // 台帳(history)から「まだ架電していない」事業者を、発見が新しい順に並べて返す。
 // 見つかった時期に関わらず、架電済みでないものはずっとここに残り続ける。
+// (実行中でも、その時点までにファイルへ書き込まれた分がそのまま反映される)
 function buildUncalledLeads(limit) {
-  const history = loadHistory();
+  const historyMap = loadHistoryMap();
   const callStatus = loadCallStatus();
 
-  const entries = Object.entries(history)
+  const entries = [...historyMap.entries()]
     .filter(([domain]) => !(callStatus[domain] && callStatus[domain].called))
     .sort((a, b) => new Date(b[1].firstSeenAt) - new Date(a[1].firstSeenAt));
 
@@ -623,7 +686,7 @@ async function runCheck(resume) {
   const allDomains = readDomains();
   const alreadyDone = resume ? loadAlreadyProcessedDomains() : new Set();
   const remaining = allDomains.filter((d) => !alreadyDone.has(d));
-  const history = loadHistory(); // 過去に見つかった事業者の台帳(ドメイン→初回検出日)
+  const historyMap = loadHistoryMap(); // 過去に見つかった事業者の台帳(ドメイン→詳細情報)
 
   state.running = true;
   state.stopRequested = false;
@@ -696,19 +759,24 @@ async function runCheck(resume) {
             if (result.score > 0) {
               writeStream.write(rowToCsvLine(result));
 
-              // 台帳(history)に詳細情報を保存する。
+              // 台帳(history)に詳細情報を保存する。見つかった瞬間にファイルへ追記するので、
+              // 実行が終わるのを待たずに「未架電リスト」へリアルタイムで反映される。
               // 初めて見つかったドメインは firstSeenAt を記録し、以後は上書きしない。
-              // (これにより「未架電の一覧」を、見つかった時期に関わらずいつでも復元できる)
-              if (!history[domain]) {
-                history[domain] = {
+              const existing = historyMap.get(domain);
+              if (!existing) {
+                const entry = {
+                  domain,
                   firstSeenAt: new Date().toISOString(),
                   lastCheckedAt: new Date().toISOString(),
                   row: result,
                 };
+                historyMap.set(domain, entry);
+                appendHistoryEntry(entry);
                 state.newFound++;
               } else {
-                history[domain].row = result;
-                history[domain].lastCheckedAt = new Date().toISOString();
+                existing.row = result;
+                existing.lastCheckedAt = new Date().toISOString();
+                appendHistoryEntry(existing); // firstSeenAtは既存のものを引き継ぐ
               }
             } else {
               state.zeroScoreSkipped++;
@@ -725,7 +793,6 @@ async function runCheck(resume) {
   } finally {
     writeStream.end();
     progressStream.end();
-    saveHistory(history);
     state.running = false;
     state.finishedAt = new Date();
   }
@@ -807,6 +874,17 @@ app.post("/api/stop", (req, res) => {
   }
   state.stopRequested = true;
   res.json({ stopping: true });
+});
+
+// 履歴ファイル(history.json)を整理する。
+// 同じドメインが何度も再チェックされていると行が重複して増えていくので、
+// ドメインごとに最新の1行だけを残してファイルを小さくする。
+app.post("/api/compact-history", (req, res) => {
+  if (state.running) {
+    return res.status(409).json({ error: "実行中は整理できません。停止してから実行してください。" });
+  }
+  const count = compactHistoryFile();
+  res.json({ ok: true, count });
 });
 
 // 進捗確認
