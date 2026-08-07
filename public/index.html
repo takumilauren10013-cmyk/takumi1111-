@@ -24,11 +24,34 @@
   tr.called { background: #f0fdf4; color: #888; }
   tr.called td { text-decoration: line-through; }
   .call-cell { text-align: center; white-space: nowrap; }
+  textarea { width: 100%; box-sizing: border-box; font-family: monospace; font-size: 13px; padding: 8px; }
+  .domain-box { background: #f9fafb; border: 1px solid #ddd; border-radius: 6px; padding: 14px; margin-bottom: 20px; }
+  .save-msg { font-size: 13px; margin-left: 8px; color: #0a7d28; }
 </style>
 </head>
 <body>
   <h1>JapanChecker</h1>
-  <p>domains.txt に記載したドメインを解析し、result.csv に営業リストを出力します。架電したら「架電」列にチェックを入れると記録されます。</p>
+  <p>ドメイン一覧を入力して解析し、result.csv に営業リストを出力します。架電したら「架電」列にチェックを入れると記録されます。</p>
+
+  <div class="domain-box">
+    <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">
+      <strong>解析したいドメイン一覧(1行に1ドメイン)</strong>
+      <span class="note" id="domainCount" style="padding:0;">未読み込み</span>
+    </div>
+    <textarea id="domainsArea" rows="10" placeholder="example.com&#10;example.jp&#10;sample.net"></textarea>
+    <div class="toolbar" style="margin-top:8px;">
+      <button id="saveDomainsBtn">この内容を保存する</button>
+      <button id="loadDomainsBtn">サーバー上の内容を読み込み直す</button>
+      <label style="cursor:pointer;">
+        <input type="file" id="domainsFileInput" accept=".txt,.csv" style="display:none;" />
+        <span id="domainsFileLabel" style="text-decoration:underline;">…またはテキストファイルを選んで読み込む</span>
+      </label>
+      <span id="saveMsg" class="save-msg" style="display:none;">保存しました</span>
+    </div>
+    <p class="note" style="padding:0; margin-top:6px;">
+      「https://」や「www.」が付いたままでも自動的に取り除かれます。保存すると、サーバー上の domains.txt が上書きされます。
+    </p>
+  </div>
 
   <label style="display:block; margin-bottom:10px; font-size:13px;">
     <input type="checkbox" id="resumeCheck" />
@@ -66,6 +89,12 @@
 
 <script>
 const statusEl = document.getElementById('status');
+const domainsArea = document.getElementById('domainsArea');
+const domainCount = document.getElementById('domainCount');
+const saveDomainsBtn = document.getElementById('saveDomainsBtn');
+const loadDomainsBtn = document.getElementById('loadDomainsBtn');
+const domainsFileInput = document.getElementById('domainsFileInput');
+const saveMsg = document.getElementById('saveMsg');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const notifyBtn = document.getElementById('notifyBtn');
@@ -271,6 +300,46 @@ downloadNewBtn.addEventListener('click', () => {
 
 refreshAllBtn.addEventListener('click', loadAllList);
 refreshNewBtn.addEventListener('click', loadNewList);
+
+// ---- ドメイン一覧の読み込み・保存 ----
+
+async function loadDomainsFromServer() {
+  const res = await fetch('/api/domains');
+  const data = await res.json();
+  domainsArea.value = data.text;
+  domainCount.textContent = `現在 ${data.count} 件`;
+}
+
+saveDomainsBtn.addEventListener('click', async () => {
+  const res = await fetch('/api/domains', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: domainsArea.value }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    alert(data.error || '保存できませんでした');
+    return;
+  }
+  domainCount.textContent = `現在 ${data.count} 件`;
+  saveMsg.style.display = 'inline';
+  setTimeout(() => (saveMsg.style.display = 'none'), 2000);
+});
+
+loadDomainsBtn.addEventListener('click', loadDomainsFromServer);
+
+domainsFileInput.addEventListener('change', () => {
+  const file = domainsFileInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    domainsArea.value = reader.result;
+    domainCount.textContent = '(保存ボタンを押すまで未保存)';
+  };
+  reader.readAsText(file, 'utf-8');
+});
+
+loadDomainsFromServer();
 
 refreshStatus();
 loadNewList();
